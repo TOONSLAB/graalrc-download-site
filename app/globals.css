@@ -2,36 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+/* Cinzel peut être gardé pour le logo si on veut garder un clin d'œil rétro, ou supprimé */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
 
 @layer base {
   * {
     box-sizing: border-box;
   }
   body {
-    @apply bg-graal-darker text-gray-100 font-sans antialiased;
+    @apply bg-graal-dark text-graal-text-main font-sans antialiased;
+    background-image: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #030712 40%);
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-gold-gradient text-graal-darker font-semibold px-6 py-3 rounded-lg shadow-graal hover:shadow-graal-lg transition-all duration-300 transform hover:scale-105;
+    @apply bg-primary-gradient text-white font-medium px-6 py-3 rounded-lg shadow-lg shadow-graal-primary/30 hover:shadow-graal-primary/50 transition-all duration-300 transform hover:-translate-y-0.5 border border-white/10;
   }
   
   .btn-secondary {
-    @apply bg-graal-dark border-2 border-graal-primary text-graal-primary font-semibold px-6 py-3 rounded-lg hover:bg-graal-primary hover:text-graal-darker transition-all duration-300;
+    @apply bg-white/5 border border-white/10 text-white font-medium px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-300 backdrop-blur-sm;
   }
   
   .card-graal {
-    @apply bg-graal-dark border border-graal-primary/30 rounded-xl p-6 shadow-graal backdrop-blur-sm;
+    @apply bg-card-gradient border border-white/5 rounded-2xl p-6 shadow-xl backdrop-blur-md hover:border-graal-primary/30 transition-all duration-300;
   }
   
   .input-graal {
-    @apply bg-graal-darker border border-graal-primary/30 rounded-lg px-4 py-3 text-gray-100 focus:border-graal-primary focus:ring-2 focus:ring-graal-primary/50 outline-none transition-all;
+    @apply bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-graal-primary focus:ring-1 focus:ring-graal-primary outline-none transition-all placeholder-gray-500;
   }
   
-  .medieval-title {
-    @apply font-medieval text-graal-primary;
+  .prose-graal {
+    @apply prose-headings:font-display prose-headings:text-white prose-p:text-gray-300 prose-strong:text-white prose-a:text-graal-primary hover:prose-a:text-graal-secondary;
   }
 }
 
@@ -41,7 +48,7 @@
     transform: translateY(0px);
   }
   50% {
-    transform: translateY(-20px);
+    transform: translateY(-10px);
   }
 }
 
@@ -49,18 +56,13 @@
   animation: float 6s ease-in-out infinite;
 }
 
-/* Effet de particules d'or */
-@keyframes sparkle {
-  0%, 100% {
-    opacity: 0;
-    transform: scale(0);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.sparkle {
-  animation: sparkle 2s ease-in-out infinite;
+/* Glow effect for background blobs */
+.bg-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, rgba(0,0,0,0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
 }
