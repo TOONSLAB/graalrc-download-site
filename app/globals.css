@@ -38,7 +38,13 @@
   }
   
   .prose-graal {
-    @apply prose-headings:font-display prose-headings:text-white prose-p:text-gray-300 prose-strong:text-white prose-a:text-graal-primary hover:prose-a:text-graal-secondary;
+    @apply text-gray-300;
+  }
+  .prose-graal h1, .prose-graal h2, .prose-graal h3, .prose-graal h4, .prose-graal strong {
+    @apply font-display text-white;
+  }
+  .prose-graal a {
+    @apply text-graal-primary hover:text-graal-secondary;
   }
 }
 
