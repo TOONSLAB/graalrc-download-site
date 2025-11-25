@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-graal-darker text-gray-100 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gold-gradient text-graal-darker font-semibold px-6 py-3 rounded-lg shadow-graal hover:shadow-graal-lg transition-all duration-300 transform hover:scale-105;
+  }
+  
+  .btn-secondary {
+    @apply bg-graal-dark border-2 border-graal-primary text-graal-primary font-semibold px-6 py-3 rounded-lg hover:bg-graal-primary hover:text-graal-darker transition-all duration-300;
+  }
+  
+  .card-graal {
+    @apply bg-graal-dark border border-graal-primary/30 rounded-xl p-6 shadow-graal backdrop-blur-sm;
+  }
+  
+  .input-graal {
+    @apply bg-graal-darker border border-graal-primary/30 rounded-lg px-4 py-3 text-gray-100 focus:border-graal-primary focus:ring-2 focus:ring-graal-primary/50 outline-none transition-all;
+  }
+  
+  .medieval-title {
+    @apply font-medieval text-graal-primary;
+  }
+}
+
+/* Animations personnalisées */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.float-animation {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Effet de particules d'or */
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sparkle {
+  animation: sparkle 2s ease-in-out infinite;
+}
