@@ -6,7 +6,7 @@
 set -e
 
 VERSION="${1:-1.0.2}"
-GITHUB_REPO="votre-username/graal-rc"  # À modifier avec votre repo
+GITHUB_REPO="TOONSLAB/rc"
 RELEASE_DIR="../rc-artifacts"
 
 echo "📦 Upload des binaires Graal RC sur GitHub Releases"
@@ -60,21 +60,19 @@ info "Dossier des binaires trouvé"
 # Lister les fichiers disponibles
 echo ""
 echo "Fichiers trouvés:"
-ls -lh *.exe *.dmg *.AppImage *.deb 2>/dev/null || warn "Aucun fichier binaire trouvé"
+ls -lh *.zip *.exe *.dmg *.AppImage *.deb 2>/dev/null || warn "Aucun fichier binaire trouvé"
 echo ""
 
 # Vérifier les fichiers requis
-WINDOWS_FILE="RC-GTK3-Windows-${VERSION}.exe"
-MACOS_FILE="RC-GTK3-macOS-${VERSION}.dmg"
-LINUX_APPIMAGE="RC-GTK3-Linux-${VERSION}.AppImage"
-LINUX_DEB="RC-GTK3-Linux-${VERSION}.deb"
+WINDOWS_FILE="RC-GTK3-Windows-${VERSION}.zip"
+MACOS_FILE="GraalRC-${VERSION}.dmg"
+LINUX_ARCHIVE="RC-GTK3-Linux-${VERSION}.tar.gz"
 
 MISSING_FILES=()
 
 [ ! -f "$WINDOWS_FILE" ] && MISSING_FILES+=("$WINDOWS_FILE")
 [ ! -f "$MACOS_FILE" ] && MISSING_FILES+=("$MACOS_FILE")
-[ ! -f "$LINUX_APPIMAGE" ] && MISSING_FILES+=("$LINUX_APPIMAGE")
-[ ! -f "$LINUX_DEB" ] && MISSING_FILES+=("$LINUX_DEB")
+[ ! -f "$LINUX_ARCHIVE" ] && MISSING_FILES+=("$LINUX_ARCHIVE")
 
 if [ ${#MISSING_FILES[@]} -gt 0 ]; then
     warn "Fichiers manquants:"
@@ -92,7 +90,7 @@ fi
 # Créer le tag Git si nécessaire
 echo ""
 echo "📝 Création du tag Git..."
-cd ../../rc  # Retour au dossier rc
+cd ../rc  # Retour au dossier rc
 
 if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
     warn "Le tag v${VERSION} existe déjà"
@@ -127,7 +125,7 @@ RELEASE_NOTES="# Graal RC ${VERSION} - Version Béta
 ## 📥 Téléchargements
 
 ### Windows
-- **Installeur NSIS**: \`${WINDOWS_FILE}\`
+- **Archive ZIP**: \`${WINDOWS_FILE}\`
 - Configuration requise: Windows 10 ou supérieur
 
 ### macOS
@@ -135,9 +133,8 @@ RELEASE_NOTES="# Graal RC ${VERSION} - Version Béta
 - Configuration requise: macOS 10.14 Mojave ou supérieur
 
 ### Linux
-- **AppImage**: \`${LINUX_APPIMAGE}\` (Toutes distributions)
-- **Package DEB**: \`${LINUX_DEB}\` (Ubuntu, Debian)
-- Configuration requise: Ubuntu 20.04+, Debian 11+, Fedora 35+
+- **Archive Tarball**: \`${LINUX_ARCHIVE}\` (Générique)
+- Configuration requise: Ubuntu 20.04+, Debian 11+, Fedora 35+ (GTK3 requis)
 
 ## 🎯 Nouveautés
 
@@ -149,9 +146,9 @@ RELEASE_NOTES="# Graal RC ${VERSION} - Version Béta
 ## 📝 Installation
 
 ### Windows
-1. Téléchargez le fichier .exe
-2. Exécutez l'installeur
-3. Suivez les instructions
+1. Téléchargez le fichier .zip
+2. Extrayez l'archive
+3. Exécutez \`RemoteControl.exe\` dans le sous-dossier \`RC-GTK3-dist\`
 
 ### macOS
 1. Téléchargez le fichier .dmg
@@ -159,16 +156,15 @@ RELEASE_NOTES="# Graal RC ${VERSION} - Version Béta
 3. Glissez Graal RC dans Applications
 
 ### Linux
-**AppImage:**
-\`\`\`bash
-chmod +x ${LINUX_APPIMAGE}
-./${LINUX_APPIMAGE}
-\`\`\`
-
-**DEB:**
-\`\`\`bash
-sudo dpkg -i ${LINUX_DEB}
-\`\`\`
+1. Téléchargez l'archive \`.tar.gz\`
+2. Extrayez l'archive :
+   \`\`\`bash
+   tar -xzf ${LINUX_ARCHIVE}
+   \`\`\`
+3. Lancez l'exécutable :
+   \`\`\`bash
+   ./RC-GTK3-Linux/RC-gtk3
+   \`\`\`
 
 ## 🐛 Bugs Connus
 
@@ -213,15 +209,9 @@ if [ -f "$MACOS_FILE" ]; then
     ((UPLOADED++))
 fi
 
-if [ -f "$LINUX_APPIMAGE" ]; then
-    gh release upload "v${VERSION}" "$LINUX_APPIMAGE" --repo "$GITHUB_REPO"
-    info "Linux AppImage: $LINUX_APPIMAGE"
-    ((UPLOADED++))
-fi
-
-if [ -f "$LINUX_DEB" ]; then
-    gh release upload "v${VERSION}" "$LINUX_DEB" --repo "$GITHUB_REPO"
-    info "Linux DEB: $LINUX_DEB"
+if [ -f "$LINUX_ARCHIVE" ]; then
+    gh release upload "v${VERSION}" "$LINUX_ARCHIVE" --repo "$GITHUB_REPO"
+    info "Linux Archive: $LINUX_ARCHIVE"
     ((UPLOADED++))
 fi
 
@@ -236,8 +226,7 @@ echo "🔒 Génération des checksums..."
     echo ""
     [ -f "$WINDOWS_FILE" ] && md5sum "$WINDOWS_FILE"
     [ -f "$MACOS_FILE" ] && md5sum "$MACOS_FILE"
-    [ -f "$LINUX_APPIMAGE" ] && md5sum "$LINUX_APPIMAGE"
-    [ -f "$LINUX_DEB" ] && md5sum "$LINUX_DEB"
+    [ -f "$LINUX_ARCHIVE" ] && md5sum "$LINUX_ARCHIVE"
 } > checksums.txt
 
 gh release upload "v${VERSION}" checksums.txt --repo "$GITHUB_REPO"

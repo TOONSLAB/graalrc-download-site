@@ -1,371 +1,518 @@
 'use client'
 
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { useTranslation } from '@/lib/i18n-context'
 
-const DOWNLOAD_VERSION = '1.0.2'
-const RELEASE_TAG = 'v1.0.2'
-const GITHUB_RELEASE_URL = `https://github.com/TOONSLAB/graal-rc-releases/releases/download/${RELEASE_TAG}`
-const GITHUB_RELEASE_PAGE = `https://github.com/TOONSLAB/graal-rc-releases/releases/tag/${RELEASE_TAG}`
+// ---------- Types matching the API response ----------
 
-const downloads = {
+interface AssetInfo {
+  url: string
+  name: string
+  size: number
+}
+
+interface PlatformDownloads {
+  installer?: AssetInfo
+  archive?: AssetInfo
+}
+
+interface ReleasesData {
+  version: string
+  date: string
+  tag: string
+  platforms: {
+    windows: PlatformDownloads
+    macos: PlatformDownloads
+    linux: PlatformDownloads
+  }
+  checksums: Record<string, AssetInfo>
+  releaseUrl: string
+}
+
+type PlatformKey = 'windows' | 'macos' | 'linux'
+
+// ---------- Helpers ----------
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  } catch {
+    return iso
+  }
+}
+
+const PLATFORM_META: Record<
+  PlatformKey,
+  {
+    name: string
+    icon: string
+    requirements: string
+    installerLabel: string
+    installerBadge: string
+    archiveLabel: string
+    archiveBadge: string
+  }
+> = {
   windows: {
     name: 'Windows',
-    icon: '🪟',
-    file: 'RC-GTK3-Windows-20251120.zip',
-    url: `${GITHUB_RELEASE_URL}/RC-GTK3-Windows-20251120.zip`,
-    size: '~25 MB',
-    requirements: 'Windows 10 ou supérieur',
-    description: 'Archive ZIP avec toutes les bibliothèques GTK3 incluses - Prête à l\'emploi',
+    icon: '\uD83E\uDE9F', // window emoji
+    requirements: 'Windows 10 or later (64-bit)',
+    installerLabel: 'Windows Installer',
+    installerBadge: '.exe',
+    archiveLabel: 'Portable Archive',
+    archiveBadge: '.zip',
   },
   macos: {
     name: 'macOS',
-    icon: '🍎',
-    file: 'GraalRC-1.0.2.dmg',
-    url: `${GITHUB_RELEASE_URL}/GraalRC-1.0.2.dmg`,
-    size: '~15 MB',
-    requirements: 'macOS 10.15 ou supérieur (Intel & Apple Silicon)',
-    description: 'Bundle .app signé avec icônes, ressources et coloration syntaxique - Nécessite GTK3 & GtkSourceView3',
+    icon: '\uD83C\uDF4E', // apple emoji
+    requirements: 'macOS 12+ (Intel & Apple Silicon)',
+    installerLabel: 'macOS Disk Image',
+    installerBadge: '.dmg',
+    archiveLabel: 'Archive',
+    archiveBadge: '.zip',
   },
   linux: {
     name: 'Linux',
-    icon: '🐧',
-    files: [
-      { 
-        type: 'Archive tar.gz', 
-        file: `RC-GTK3-Linux-${DOWNLOAD_VERSION}.tar.gz`,
-        url: `${GITHUB_RELEASE_URL}/RC-GTK3-Linux-${DOWNLOAD_VERSION}.tar.gz`,
-        size: '~15 MB',
-        description: 'Archive portable avec binaire statique'
-      }
-    ],
-    requirements: 'Ubuntu 20.04+, Debian 11+, Fedora 35+, Arch Linux',
+    icon: '\uD83D\uDC27', // penguin emoji
+    requirements: 'Ubuntu 20.04+, Debian 11+, Fedora 35+',
+    installerLabel: 'Debian Package',
+    installerBadge: '.deb',
+    archiveLabel: 'Portable Archive',
+    archiveBadge: '.tar.gz',
   },
 }
 
-export default function DownloadPage() {
-  const [os, setOs] = useState<'windows' | 'macos' | 'linux' | null>(null)
+// ---------- Sub-components ----------
 
+function DownloadButton({
+  asset,
+  label,
+  badge,
+  primary,
+}: {
+  asset: AssetInfo
+  label: string
+  badge: string
+  primary?: boolean
+}) {
+  return (
+    <div className="bg-graal-darker/50 rounded-lg p-4 border border-graal-gold/20 hover:border-graal-gold/50 transition-colors group">
+      <p className="text-gray-300 mb-1 flex items-center justify-between">
+        <span className="font-semibold text-graal-gold">{label}</span>
+        <span className="text-xs bg-graal-gold/10 text-graal-gold px-2 py-1 rounded">
+          {badge}
+        </span>
+      </p>
+      <p className="text-xs text-gray-500 mb-3">{asset.name}</p>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-gray-400">Size: {formatBytes(asset.size)}</span>
+      </div>
+      <a
+        href={asset.url}
+        className={`block text-center font-display font-semibold py-2.5 rounded-lg transition-all ${
+          primary
+            ? 'btn-primary w-full group-hover:shadow-graal-gold/20'
+            : 'w-full border border-graal-gold/30 text-graal-gold hover:bg-graal-gold/10'
+        }`}
+      >
+        Download
+      </a>
+    </div>
+  )
+}
+
+function ChecksumLink({ checksums }: { checksums: Record<string, AssetInfo> }) {
+  const entries = Object.values(checksums)
+  if (entries.length === 0) return null
+  return (
+    <div className="mt-4 text-center">
+      <p className="text-xs text-gray-500 mb-1">SHA256 Checksums</p>
+      <div className="flex flex-wrap gap-2 justify-center">
+        {entries.map((c) => (
+          <a
+            key={c.name}
+            href={c.url}
+            className="text-xs text-graal-gold/70 hover:text-graal-gold underline underline-offset-2"
+          >
+            {c.name}
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse space-y-8">
+      <div className="max-w-3xl mx-auto h-48 bg-graal-darker/50 rounded-2xl" />
+      <div className="grid md:grid-cols-3 gap-8">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-80 bg-graal-darker/50 rounded-2xl" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ErrorFallback({ releaseUrl }: { releaseUrl: string }) {
+  return (
+    <div className="max-w-2xl mx-auto text-center py-16">
+      <div className="text-6xl mb-6">&#9888;&#65039;</div>
+      <h2 className="text-2xl font-display text-white mb-4">
+        Unable to load download information
+      </h2>
+      <p className="text-gray-400 mb-8">
+        We could not fetch the latest release data. You can download directly from GitHub.
+      </p>
+      <a
+        href={releaseUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn-primary px-8 py-3 text-lg inline-flex items-center gap-2"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+        </svg>
+        View Releases on GitHub
+      </a>
+    </div>
+  )
+}
+
+// ---------- Platform Card ----------
+
+function PlatformCard({
+  platformKey,
+  downloads,
+  isDetected,
+}: {
+  platformKey: PlatformKey
+  downloads: PlatformDownloads
+  isDetected: boolean
+}) {
+  const meta = PLATFORM_META[platformKey]
+  const hasContent = downloads.installer || downloads.archive
+
+  return (
+    <div
+      className={`card-graal shadow-graal-lg transition-all duration-300 ${
+        isDetected ? 'ring-2 ring-graal-gold scale-105' : 'hover:bg-graal-darker/80'
+      }`}
+    >
+      <div className="text-center mb-6">
+        <div className="text-6xl mb-4 drop-shadow-lg">{meta.icon}</div>
+        <h2 className="text-3xl font-display text-graal-gold mb-2">{meta.name}</h2>
+        <p className="text-sm text-gray-400">{meta.requirements}</p>
+      </div>
+
+      {hasContent ? (
+        <div className="space-y-4">
+          {downloads.installer && (
+            <DownloadButton
+              asset={downloads.installer}
+              label={meta.installerLabel}
+              badge={meta.installerBadge}
+              primary
+            />
+          )}
+          {downloads.archive && (
+            <DownloadButton
+              asset={downloads.archive}
+              label={meta.archiveLabel}
+              badge={meta.archiveBadge}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="text-center py-8 text-gray-500 text-sm">
+          No builds available for this platform yet.
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------- Main page ----------
+
+export default function DownloadPage() {
+  const [os, setOs] = useState<PlatformKey | null>(null)
+  const [data, setData] = useState<ReleasesData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const { t } = useTranslation()
+
+  // Detect OS
   useEffect(() => {
-    const userAgent = window.navigator.userAgent.toLowerCase()
-    if (userAgent.includes('win')) setOs('windows')
-    else if (userAgent.includes('mac')) setOs('macos')
-    else if (userAgent.includes('linux')) setOs('linux')
+    const ua = window.navigator.userAgent.toLowerCase()
+    if (ua.includes('win')) setOs('windows')
+    else if (ua.includes('mac')) setOs('macos')
+    else if (ua.includes('linux')) setOs('linux')
   }, [])
 
-  const handleDownload = (url: string) => {
-    window.open(url, '_blank')
-  }
+  // Fetch release data
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch('/api/releases')
+        if (!res.ok) throw new Error('API error')
+        const json = (await res.json()) as ReleasesData
+        if (!cancelled) {
+          setData(json)
+          setLoading(false)
+        }
+      } catch {
+        if (!cancelled) {
+          setError(true)
+          setLoading(false)
+        }
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  const getRecommendedDownload = () => {
-    if (!os) return null
-    return downloads[os]
-  }
-
-  const recommended = getRecommendedDownload()
+  // Determine the recommended platform's primary download
+  const recommended = os && data ? data.platforms[os] : null
+  const recommendedAsset = recommended?.installer || recommended?.archive || null
 
   return (
     <div className="min-h-screen px-4 py-12 relative overflow-hidden">
-      {/* Background elements */}
-      <div className="absolute top-0 left-0 w-full h-full bg-[url('/images/pattern.png')] opacity-5 pointer-events-none"></div>
-      <div className="absolute -top-20 -left-20 w-96 h-96 bg-graal-primary/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-red-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="bg-glow -top-20 -left-20 opacity-20 bg-graal-gold"></div>
+        <div className="bg-glow top-40 right-0 opacity-10 bg-graal-blue"></div>
+        <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"></div>
+      </div>
 
       <div className="max-w-6xl mx-auto relative z-10">
         {/* Header */}
         <div className="text-center mb-12">
-          <Link href="/" className="inline-block mb-6 hover:scale-105 transition-transform duration-300">
-            <div className="w-24 h-24 bg-gold-gradient rounded-2xl flex items-center justify-center shadow-graal-lg mx-auto border-2 border-graal-accent/30">
-              <span className="text-6xl font-medieval font-bold text-graal-darker drop-shadow-sm">G</span>
-            </div>
-          </Link>
-          <h1 className="text-6xl font-medieval text-transparent bg-clip-text bg-gradient-to-b from-graal-primary to-graal-accent mb-4 drop-shadow-md">
-            Télécharger Graal RC
+          <h1 className="text-6xl font-display font-bold text-white mb-4 drop-shadow-md">
+            {t('hero.cta_beta')} {t('hero.title_highlight')}
           </h1>
-          <div className="inline-flex items-center space-x-2 bg-graal-darker/80 px-4 py-2 rounded-full border border-graal-primary/30 shadow-inner mb-4">
-            <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
-            <p className="text-gray-300 font-medium">
-              Version {DOWNLOAD_VERSION} - Édition Professionnelle
-            </p>
-          </div>
+
+          {data && (
+            <div className="inline-flex items-center space-x-2 bg-graal-darker/80 px-4 py-2 rounded-full border border-graal-gold/30 shadow-inner mb-4">
+              <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></span>
+              <p className="text-gray-300 font-medium">
+                Version {data.version} &mdash; {formatDate(data.date)}
+              </p>
+            </div>
+          )}
+
           <p className="text-gray-400 max-w-2xl mx-auto">
-            Installeurs professionnels avec toutes les dépendances incluses pour Windows, macOS et Linux.
-            Open Source et sécurisé.
+            Production builds with native installers for every platform. Secure and optimized.
           </p>
         </div>
 
-        {/* Recommended Download */}
-        {recommended && (
-          <div className="max-w-3xl mx-auto mb-16 animate-fade-in-up">
-            <div className="bg-gradient-to-br from-graal-darker to-black border border-graal-primary/40 rounded-2xl p-8 shadow-[0_0_50px_rgba(234,179,8,0.1)] relative overflow-hidden group">
-              <div className="absolute top-0 right-0 bg-graal-primary text-graal-darker text-xs font-bold px-4 py-1 rounded-bl-xl font-medieval shadow-lg">
-                RECOMMANDÉ POUR VOUS
-              </div>
-              
-              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-                <div className="text-center md:text-left">
-                  <div className="text-7xl mb-4 md:mb-0 animate-bounce-slow inline-block">
-                    {recommended.icon}
-                  </div>
-                </div>
-                
-                <div className="flex-1 text-center md:text-left">
-                  <h2 className="text-3xl font-medieval text-white mb-2">
-                    Télécharger pour {recommended.name}
-                  </h2>
-                  <p className="text-gray-400 mb-2">
-                    Compatible avec {recommended.requirements}
-                  </p>
-                  {'files' in recommended ? (
-                    <p className="text-sm text-graal-primary">
-                      Plusieurs options disponibles ci-dessous
-                    </p>
-                  ) : (
-                    <p className="text-sm text-graal-primary flex items-center justify-center md:justify-start gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      {recommended.description}
-                    </p>
-                  )}
-                </div>
+        {/* Loading state */}
+        {loading && <LoadingSkeleton />}
 
-                <div>
-                  {'files' in recommended ? (
-                    <a href="#all-downloads" className="btn-primary px-8 py-4 text-lg shadow-lg shadow-graal-primary/20 flex items-center gap-2">
-                      <span>Voir les options</span>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </a>
-                  ) : (
-                    <button
-                      onClick={() => handleDownload(recommended.url)}
-                      className="btn-primary px-8 py-4 text-lg shadow-lg shadow-graal-primary/20 flex items-center gap-2 hover:scale-105 transition-transform"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                      <span>Télécharger</span>
-                    </button>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2 text-center">
-                    {'size' in recommended && `Taille: ${recommended.size}`}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Error state */}
+        {error && (
+          <ErrorFallback
+            releaseUrl={`https://github.com/${process.env.NEXT_PUBLIC_GITHUB_OWNER || 'TOONSLAB'}/${process.env.NEXT_PUBLIC_GITHUB_REPO || 'rc'}/releases`}
+          />
         )}
 
-        {/* Downloads Grid */}
-        <h3 id="all-downloads" className="text-2xl font-medieval text-center text-graal-primary mb-8 flex items-center justify-center gap-4">
-          <span className="h-px w-12 bg-graal-primary/30"></span>
-          Tous les téléchargements
-          <span className="h-px w-12 bg-graal-primary/30"></span>
-        </h3>
-        
-        <div className="grid md:grid-cols-3 gap-8 mb-12">
-          {/* Windows */}
-          <div className={`card-graal shadow-graal-lg transition-all duration-300 ${os === 'windows' ? 'ring-2 ring-graal-primary scale-105' : 'hover:bg-graal-darker/80'}`}>
-            <div className="text-center mb-6">
-              <div className="text-6xl mb-4 drop-shadow-lg">{downloads.windows.icon}</div>
-              <h2 className="text-3xl font-medieval text-graal-primary mb-2">
-                {downloads.windows.name}
-              </h2>
-              <p className="text-sm text-gray-400">{downloads.windows.requirements}</p>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-graal-darker/50 rounded-lg p-4 border border-graal-primary/20 hover:border-graal-primary/50 transition-colors group">
-                <p className="text-gray-300 mb-2 flex items-center justify-between">
-                  <span className="font-semibold text-graal-primary">Archive Portable</span>
-                  <span className="text-xs bg-graal-primary/10 text-graal-primary px-2 py-1 rounded">.zip</span>
-                </p>
-                <p className="text-xs text-gray-500 mb-2">{downloads.windows.description}</p>
-                <p className="text-sm text-gray-400 mb-4">
-                  Taille: {downloads.windows.size}
-                </p>
-                <button
-                  onClick={() => handleDownload(downloads.windows.url)}
-                  className="btn-primary w-full group-hover:shadow-graal-primary/20"
-                >
-                  Télécharger
-                </button>
-              </div>
-            </div>
-          </div>
+        {/* Content when data is loaded */}
+        {data && !loading && (
+          <>
+            {/* Recommended Download */}
+            {os && recommendedAsset && (
+              <div className="max-w-3xl mx-auto mb-16 animate-fade-in-up">
+                <div className="bg-gradient-to-br from-graal-darker to-black border border-graal-gold/40 rounded-2xl p-8 shadow-[0_0_50px_rgba(251,191,36,0.1)] relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 bg-graal-gold text-graal-darker text-xs font-bold px-4 py-1 rounded-bl-xl font-display shadow-lg">
+                    RECOMMENDED FOR YOU
+                  </div>
 
-          {/* macOS */}
-          <div className={`card-graal shadow-graal-lg transition-all duration-300 ${os === 'macos' ? 'ring-2 ring-graal-primary scale-105' : 'hover:bg-graal-darker/80'}`}>
-            <div className="text-center mb-6">
-              <div className="text-6xl mb-4 drop-shadow-lg">{downloads.macos.icon}</div>
-              <h2 className="text-3xl font-medieval text-graal-primary mb-2">
-                {downloads.macos.name}
-              </h2>
-              <p className="text-sm text-gray-400">{downloads.macos.requirements}</p>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="bg-graal-darker/50 rounded-lg p-4 border border-graal-primary/20 hover:border-graal-primary/50 transition-colors group">
-                <p className="text-gray-300 mb-1 flex items-center justify-between">
-                  <span className="font-semibold text-graal-primary">Image Disque</span>
-                  <span className="text-xs bg-graal-primary/10 text-graal-primary px-2 py-1 rounded">.dmg</span>
-                </p>
-                <p className="text-xs text-gray-500 mb-2">{downloads.macos.description}</p>
-                <p className="text-sm text-gray-400 mb-4">
-                  Taille: {downloads.macos.size}
-                </p>
-                <button
-                  onClick={() => handleDownload(downloads.macos.url)}
-                  className="btn-primary w-full group-hover:shadow-graal-primary/20"
-                >
-                  Télécharger
-                </button>
-              </div>
-            </div>
-          </div>
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="text-center md:text-left">
+                      <div className="text-7xl mb-4 md:mb-0 animate-bounce-slow inline-block">
+                        {PLATFORM_META[os].icon}
+                      </div>
+                    </div>
 
-          {/* Linux */}
-          <div className={`card-graal shadow-graal-lg transition-all duration-300 ${os === 'linux' ? 'ring-2 ring-graal-primary scale-105' : 'hover:bg-graal-darker/80'}`}>
-            <div className="text-center mb-6">
-              <div className="text-6xl mb-4 drop-shadow-lg">{downloads.linux.icon}</div>
-              <h2 className="text-3xl font-medieval text-graal-primary mb-2">
-                {downloads.linux.name}
-              </h2>
-              <p className="text-sm text-gray-400">{downloads.linux.requirements}</p>
-            </div>
-            
-            <div className="space-y-4">
-              {downloads.linux.files.map((fileInfo) => (
-                <div key={fileInfo.type} className="bg-graal-darker/50 rounded-lg p-4 border border-graal-primary/20 hover:border-graal-primary/50 transition-colors group">
-                  <p className="text-gray-300 mb-1 flex items-center justify-between">
-                    <span className="font-semibold text-graal-primary">{fileInfo.type}</span>
-                  </p>
-                  <p className="text-xs text-gray-500 mb-2">{fileInfo.description}</p>
-                  <p className="text-sm text-gray-400 mb-4">
-                    Taille: {fileInfo.size}
-                  </p>
-                  <button
-                    onClick={() => handleDownload(fileInfo.url)}
-                    className="btn-primary w-full group-hover:shadow-graal-primary/20"
-                  >
-                    Télécharger
-                  </button>
+                    <div className="flex-1 text-center md:text-left">
+                      <h2 className="text-3xl font-display font-bold text-white mb-2">
+                        Download for {PLATFORM_META[os].name}
+                      </h2>
+                      <p className="text-gray-400 mb-2">
+                        Compatible with {PLATFORM_META[os].requirements}
+                      </p>
+                      <p className="text-sm text-graal-gold flex items-center justify-center md:justify-start gap-2">
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        {recommendedAsset.name}
+                      </p>
+                    </div>
+
+                    <div>
+                      <a
+                        href={recommendedAsset.url}
+                        className="btn-primary px-8 py-4 text-lg shadow-lg shadow-graal-gold/20 flex items-center gap-2 hover:scale-105 transition-transform"
+                      >
+                        <svg
+                          className="w-6 h-6"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                        <span>Download</span>
+                      </a>
+                      <p className="text-xs text-gray-500 mt-2 text-center">
+                        {formatBytes(recommendedAsset.size)}
+                      </p>
+                    </div>
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* Downloads Grid */}
+            <h3
+              id="all-downloads"
+              className="text-2xl font-display text-center text-graal-gold mb-8 flex items-center justify-center gap-4"
+            >
+              <span className="h-px w-12 bg-graal-gold/30"></span>
+              All Downloads
+              <span className="h-px w-12 bg-graal-gold/30"></span>
+            </h3>
+
+            <div className="grid md:grid-cols-3 gap-8 mb-8">
+              {(['windows', 'macos', 'linux'] as PlatformKey[]).map((key) => (
+                <PlatformCard
+                  key={key}
+                  platformKey={key}
+                  downloads={data.platforms[key]}
+                  isDetected={os === key}
+                />
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* Installation Instructions */}
-        <div className="card-graal shadow-graal-lg mb-8">
-          <h2 className="text-3xl font-medieval text-graal-primary mb-6 text-center">
-            Instructions d'installation
-          </h2>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div>
-              <h3 className="text-xl font-medieval text-graal-primary mb-3">Windows</h3>
-              <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
-                <li>Téléchargez l'archive .zip</li>
-                <li>Extrayez le contenu dans un dossier</li>
-                <li>Exécutez RC-GTK3.exe</li>
-                <li>Toutes les dépendances sont incluses</li>
-                <li>Aucune installation requise</li>
-              </ol>
-            </div>
+            {/* Checksums */}
+            <ChecksumLink checksums={data.checksums} />
 
-            <div>
-              <h3 className="text-xl font-medieval text-graal-primary mb-3">macOS</h3>
-              <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
-                <li>Téléchargez le fichier .dmg</li>
-                <li>Ouvrez l'image disque</li>
-                <li>Acceptez l'accord de licence</li>
-                <li>Glissez dans Applications</li>
-                <li>Lancez depuis le Launchpad</li>
-              </ol>
-            </div>
+            {/* Installation Instructions */}
+            <div className="card-graal shadow-graal-lg mb-8 mt-12">
+              <h2 className="text-3xl font-display text-graal-gold mb-6 text-center">
+                Installation Instructions
+              </h2>
 
-            <div>
-              <h3 className="text-xl font-medieval text-graal-primary mb-3">Linux</h3>
-              <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
-                <li><strong>DEB:</strong> sudo dpkg -i *.deb</li>
-                <li><strong>AppImage:</strong> chmod +x *.AppImage</li>
-                <li>Lancez l'application</li>
-                <li>Profitez de Graal RC!</li>
-              </ol>
-            </div>
-          </div>
-        </div>
+              <div className="grid md:grid-cols-3 gap-8">
+                {/* Windows */}
+                <div>
+                  <h3 className="text-xl font-display text-graal-gold mb-3">Windows</h3>
+                  <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
+                    <li>Download the installer (.exe) or portable archive (.zip)</li>
+                    <li>
+                      <strong>Installer:</strong> Run the .exe and follow the wizard
+                    </li>
+                    <li>
+                      <strong>Portable:</strong> Extract the ZIP and run RemoteControl.exe
+                    </li>
+                    <li>Launch GraalRC from the Start Menu or extracted folder</li>
+                  </ol>
+                </div>
 
-        {/* Features */}
-        <div className="card-graal shadow-graal-lg mb-8">
-          <h2 className="text-3xl font-medieval text-graal-primary mb-6 text-center">
-            ✨ Fonctionnalités
-          </h2>
-          <div className="grid md:grid-cols-2 gap-6 text-gray-400">
-            <div>
-              <h3 className="text-lg font-semibold text-graal-primary mb-2">Interface Professionnelle</h3>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Interface GTK3 moderne et responsive</li>
-                <li>Coloration syntaxique avancée</li>
-                <li>Éditeur de code intégré</li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-graal-primary mb-2">Builds Statiques</h3>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Toutes les dépendances incluses</li>
-                <li>Aucune installation supplémentaire</li>
-                <li>Fonctionne immédiatement</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+                {/* macOS */}
+                <div>
+                  <h3 className="text-xl font-display text-graal-gold mb-3">macOS</h3>
+                  <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
+                    <li>Download the DMG disk image</li>
+                    <li>Open the .dmg file</li>
+                    <li>Drag GraalRC to your Applications folder</li>
+                    <li>Launch from Applications (right-click &gt; Open on first run)</li>
+                  </ol>
+                </div>
 
-        {/* Support Notice */}
-        <div className="card-graal shadow-graal-lg bg-blue-500/10 border-blue-500/30 text-center p-8">
-          <div className="flex flex-col md:flex-row items-center justify-around gap-8">
-            <div className="text-left max-w-md">
-              <div className="flex items-center space-x-3 mb-4">
-                <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h3 className="text-2xl font-medieval text-blue-400">Intégrité & Sécurité</h3>
+                {/* Linux */}
+                <div>
+                  <h3 className="text-xl font-display text-graal-gold mb-3">Linux</h3>
+                  <ol className="list-decimal list-inside space-y-2 text-gray-400 text-sm">
+                    <li>
+                      <strong>.deb:</strong>{' '}
+                      <code className="text-xs bg-graal-darker/50 px-1.5 py-0.5 rounded">
+                        sudo dpkg -i graalrc_*.deb
+                      </code>
+                    </li>
+                    <li>
+                      Fix deps if needed:{' '}
+                      <code className="text-xs bg-graal-darker/50 px-1.5 py-0.5 rounded">
+                        sudo apt-get install -f
+                      </code>
+                    </li>
+                    <li>
+                      <strong>tar.gz:</strong> Extract and run{' '}
+                      <code className="text-xs bg-graal-darker/50 px-1.5 py-0.5 rounded">
+                        ./RC-gtk3
+                      </code>
+                    </li>
+                    <li>
+                      Run:{' '}
+                      <code className="text-xs bg-graal-darker/50 px-1.5 py-0.5 rounded">
+                        graalrc
+                      </code>{' '}
+                      (from .deb) or{' '}
+                      <code className="text-xs bg-graal-darker/50 px-1.5 py-0.5 rounded">
+                        ./RC-gtk3
+                      </code>{' '}
+                      (from archive)
+                    </li>
+                  </ol>
+                </div>
               </div>
-              <p className="text-gray-400 mb-4">
-                Chaque version est signée et accompagnée de sommes de contrôle SHA256 pour garantir son intégrité.
-              </p>
-              <a 
-                href={GITHUB_RELEASE_PAGE}
+            </div>
+
+            {/* Link to all releases */}
+            <div className="text-center mt-8 mb-4">
+              <a
+                href={data.releaseUrl}
                 target="_blank"
-                rel="noopener noreferrer" 
-                className="text-graal-primary hover:text-graal-accent underline flex items-center gap-2 group"
+                rel="noopener noreferrer"
+                className="text-sm text-gray-500 hover:text-graal-gold transition-colors inline-flex items-center gap-1.5"
               >
-                <span>Voir les notes de version et checksums</span>
-                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg>
+                View all releases on GitHub
               </a>
             </div>
-            
-            <div className="h-px w-full md:w-px md:h-32 bg-blue-500/20"></div>
-            
-            <div className="text-left max-w-md">
-              <div className="flex items-center space-x-3 mb-4">
-                <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-                <h3 className="text-2xl font-medieval text-purple-400">Open Source</h3>
-              </div>
-              <p className="text-gray-400 mb-4">
-                Le code source complet est disponible sur GitHub. Contribuez à l'amélioration de GraalRC !
-              </p>
-              <a 
-                href="https://github.com/TOONSLAB/rc"
-                target="_blank"
-                rel="noopener noreferrer" 
-                className="text-purple-400 hover:text-purple-300 underline flex items-center gap-2 group"
-              >
-                <span>Voir le code source</span>
-                <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-              </a>
-            </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )

@@ -3,8 +3,6 @@
 @tailwind utilities;
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
-/* Cinzel peut être gardé pour le logo si on veut garder un clin d'œil rétro, ou supprimé */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap');
 
 @layer base {
   * {
@@ -12,7 +10,7 @@
   }
   body {
     @apply bg-graal-dark text-graal-text-main font-sans antialiased;
-    background-image: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #030712 40%);
+    background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 20%, #020617 100%);
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -22,19 +20,19 @@
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-gradient text-white font-medium px-6 py-3 rounded-lg shadow-lg shadow-graal-primary/30 hover:shadow-graal-primary/50 transition-all duration-300 transform hover:-translate-y-0.5 border border-white/10;
+    @apply bg-gold-gradient text-graal-darker font-bold px-6 py-3 rounded-lg shadow-lg shadow-graal-gold/20 hover:shadow-glow transition-all duration-300 transform hover:-translate-y-0.5 border border-white/10 uppercase tracking-wide text-sm;
   }
   
   .btn-secondary {
-    @apply bg-white/5 border border-white/10 text-white font-medium px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-300 backdrop-blur-sm;
+    @apply bg-white/5 border border-white/10 text-white font-medium px-6 py-3 rounded-lg hover:bg-white/10 transition-all duration-300 backdrop-blur-sm uppercase tracking-wide text-sm;
   }
   
   .card-graal {
-    @apply bg-card-gradient border border-white/5 rounded-2xl p-6 shadow-xl backdrop-blur-md hover:border-graal-primary/30 transition-all duration-300;
+    @apply bg-card-gradient border border-white/5 rounded-2xl p-6 shadow-xl backdrop-blur-md hover:border-graal-gold/30 transition-all duration-300;
   }
   
   .input-graal {
-    @apply bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-graal-primary focus:ring-1 focus:ring-graal-primary outline-none transition-all placeholder-gray-500;
+    @apply bg-black/30 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-graal-gold focus:ring-1 focus:ring-graal-gold outline-none transition-all placeholder-gray-500;
   }
   
   .prose-graal {
@@ -44,7 +42,7 @@
     @apply font-display text-white;
   }
   .prose-graal a {
-    @apply text-graal-primary hover:text-graal-secondary;
+    @apply text-graal-gold hover:text-graal-gold_dark;
   }
 }
 
@@ -67,7 +65,7 @@
   position: absolute;
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, rgba(0,0,0,0) 70%);
+  background: radial-gradient(circle, rgba(251, 191, 36 ,0.1) 0%, rgba(0,0,0,0) 70%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;

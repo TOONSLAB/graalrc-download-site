@@ -24,9 +24,20 @@ type Job = {
   logs?: string
 }
 
+type BetaUser = {
+  id: string
+  email: string
+  email_verified: boolean
+  beta_access: boolean
+  created_at: string
+}
+
 export default function AdminPage() {
   const [apiKey, setApiKey] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [activeTab, setActiveTab] = useState<'builds' | 'users'>('builds')
+  
+  // Build states
   const [version, setVersion] = useState('1.0.3')
   const [isTriggering, setIsTriggering] = useState(false)
   const [workflows, setWorkflows] = useState<WorkflowRun[]>([])
@@ -34,6 +45,11 @@ export default function AdminPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false)
   const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  
+  // Users states
+  const [users, setUsers] = useState<BetaUser[]>([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false)
+
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -89,6 +105,60 @@ export default function AdminPage() {
     }
   }
 
+  const loadUsers = async () => {
+    if (!apiKey) return
+    setIsLoadingUsers(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        headers: { 'x-api-key': apiKey },
+      })
+
+      if (!response.ok) {
+        throw new Error('Échec du chargement des utilisateurs')
+      }
+
+      const data = await response.json()
+      setUsers(data.users || [])
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setIsLoadingUsers(false)
+    }
+  }
+
+  const toggleBetaAccess = async (userId: string, currentAccess: boolean) => {
+    if (!apiKey) return
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          id: userId,
+          beta_access: !currentAccess,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Échec de la mise à jour')
+      }
+
+      setSuccess(`Accès ${!currentAccess ? 'activé' : 'désactivé'} avec succès`)
+      loadUsers()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
   const triggerBuild = async () => {
     if (!apiKey) return
     setIsTriggering(true)
@@ -126,35 +196,36 @@ export default function AdminPage() {
   const handleLogin = () => {
     if (apiKey) {
       loadWorkflows()
+      loadUsers()
     }
   }
 
   useEffect(() => {
     if (isAuthenticated && apiKey) {
-      loadWorkflows()
+      if (activeTab === 'builds') loadWorkflows()
+      if (activeTab === 'users') loadUsers()
     }
-  }, [])
-
-  useEffect(() => {
-    if (selectedRun && apiKey) {
-      loadLogs(selectedRun)
-    }
-  }, [selectedRun])
+  }, [activeTab])
 
   useEffect(() => {
     if (!autoRefresh || !isAuthenticated) return
 
     const interval = setInterval(() => {
       if (apiKey) {
-        loadWorkflows()
-        if (selectedRun) {
-          loadLogs(selectedRun)
+        if (activeTab === 'builds') {
+          loadWorkflows()
+          if (selectedRun) {
+            loadLogs(selectedRun)
+          }
+        }
+        if (activeTab === 'users') {
+          loadUsers()
         }
       }
     }, 10000)
 
     return () => clearInterval(interval)
-  }, [autoRefresh, selectedRun, isAuthenticated, apiKey])
+  }, [autoRefresh, selectedRun, isAuthenticated, apiKey, activeTab])
 
   const getStatusBadge = (status: string, conclusion: string | null) => {
     if (status === 'completed') {
@@ -188,7 +259,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Admin Access</h1>
-            <p className="text-sm text-gray-500">Enter your API key to access the build dashboard</p>
+            <p className="text-sm text-gray-500">Enter your API key to access the dashboard</p>
           </div>
 
           {error && (
@@ -237,8 +308,8 @@ export default function AdminPage() {
                 </svg>
               </Link>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Build Dashboard</h1>
-                <p className="text-sm text-gray-500">GitHub Actions Administration</p>
+                <h1 className="text-2xl font-semibold text-gray-900">Admin Dashboard</h1>
+                <p className="text-sm text-gray-500">Administration Interface</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -258,6 +329,30 @@ export default function AdminPage() {
                 Logout
               </button>
             </div>
+          </div>
+          
+          {/* Tabs */}
+          <div className="flex gap-6 mt-6 border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('builds')}
+              className={`pb-4 text-sm font-medium transition-colors relative ${
+                activeTab === 'builds'
+                  ? 'text-blue-600 border-b-2 border-blue-600 -mb-px'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Compilations
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`pb-4 text-sm font-medium transition-colors relative ${
+                activeTab === 'users'
+                  ? 'text-blue-600 border-b-2 border-blue-600 -mb-px'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Utilisateurs Béta
+            </button>
           </div>
         </div>
       </div>
@@ -287,224 +382,314 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-24">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+        {activeTab === 'builds' && (
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-36">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-semibold text-gray-900">New Build</h2>
                 </div>
-                <h2 className="text-lg font-semibold text-gray-900">New Build</h2>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Version Number</label>
-                  <input
-                    type="text"
-                    value={version}
-                    onChange={(e) => setVersion(e.target.value)}
-                    placeholder="1.0.3"
-                    className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-gray-500 mt-2">Semantic versioning: X.Y.Z</p>
-                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Version Number</label>
+                    <input
+                      type="text"
+                      value={version}
+                      onChange={(e) => setVersion(e.target.value)}
+                      placeholder="1.0.3"
+                      className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-2">Semantic versioning: X.Y.Z</p>
+                  </div>
 
-                <button
-                  onClick={triggerBuild}
-                  disabled={isTriggering || !version}
-                  className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isTriggering ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span>Triggering...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <span>Trigger Build</span>
-                    </>
-                  )}
-                </button>
+                  <button
+                    onClick={triggerBuild}
+                    disabled={isTriggering || !version}
+                    className="w-full px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isTriggering ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Triggering...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>Trigger Build</span>
+                      </>
+                    )}
+                  </button>
 
-                <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>Note:</strong> Builds take ~15-20 minutes and generate installers for Windows, macOS, and Linux.
-                  </p>
+                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                    <p className="text-xs text-blue-900 leading-relaxed">
+                      <strong>Note:</strong> Builds take ~15-20 minutes and generate installers for Windows, macOS, and Linux.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg font-semibold text-gray-900">Recent Workflows</h2>
-                </div>
-                <button
-                  onClick={() => loadWorkflows()}
-                  disabled={isLoadingWorkflows}
-                  className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                >
-                  {isLoadingWorkflows ? (
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-
-              {isLoadingWorkflows ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-3" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <p className="text-sm text-gray-500">Chargement des workflows...</p>
-                  </div>
-                </div>
-              ) : workflows.length === 0 ? (
-                <div className="text-center py-12">
-                  <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                  <p className="text-sm text-gray-500">Aucun workflow trouvé</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {workflows.map((workflow) => (
-                    <div
-                      key={workflow.id}
-                      className={`border rounded-lg p-4 cursor-pointer transition-all ${
-                        selectedRun === workflow.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                      onClick={() => setSelectedRun(workflow.id)}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-medium text-gray-900">{workflow.name}</h3>
-                            <span className="text-xs text-gray-500">#{workflow.run_number}</span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Démarré {new Date(workflow.created_at).toLocaleString('fr-FR')}
-                          </p>
-                        </div>
-                        {getStatusBadge(workflow.status, workflow.conclusion)}
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <a
-                          href={workflow.html_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                          Voir sur GitHub
-                        </a>
-                        {workflow.updated_at !== workflow.created_at && (
-                          <span>Mis à jour {new Date(workflow.updated_at).toLocaleString('fr-FR')}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {selectedRun && (
+            <div className="lg:col-span-2 space-y-6">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gray-100 rounded-lg">
                       <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                       </svg>
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900">Logs de Build</h2>
+                    <h2 className="text-lg font-semibold text-gray-900">Recent Workflows</h2>
                   </div>
                   <button
-                    onClick={() => setSelectedRun(null)}
-                    className="text-gray-400 hover:text-gray-600"
+                    onClick={() => loadWorkflows()}
+                    disabled={isLoadingWorkflows}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    {isLoadingWorkflows ? (
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    )}
                   </button>
                 </div>
 
-                {isLoadingLogs ? (
+                {isLoadingWorkflows ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="text-center">
                       <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-3" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      <p className="text-sm text-gray-500">Chargement des logs...</p>
+                      <p className="text-sm text-gray-500">Chargement des workflows...</p>
                     </div>
                   </div>
-                ) : jobs.length === 0 ? (
+                ) : workflows.length === 0 ? (
                   <div className="text-center py-12">
                     <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                     </svg>
-                    <p className="text-sm text-gray-500">Aucun log disponible</p>
+                    <p className="text-sm text-gray-500">Aucun workflow trouvé</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {jobs.map((job) => (
-                      <div key={job.id} className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="font-medium text-gray-900">{job.name}</span>
-                            {getStatusBadge(job.status, job.conclusion)}
+                  <div className="space-y-3">
+                    {workflows.map((workflow) => (
+                      <div
+                        key={workflow.id}
+                        className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                          selectedRun === workflow.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                        onClick={() => setSelectedRun(workflow.id)}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="font-medium text-gray-900">{workflow.name}</h3>
+                              <span className="text-xs text-gray-500">#{workflow.run_number}</span>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Démarré {new Date(workflow.created_at).toLocaleString('fr-FR')}
+                            </p>
                           </div>
-                          {job.started_at && (
-                            <span className="text-xs text-gray-500">
-                              {new Date(job.started_at).toLocaleString('fr-FR')}
-                            </span>
+                          {getStatusBadge(workflow.status, workflow.conclusion)}
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <a
+                            href={workflow.html_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            Voir sur GitHub
+                          </a>
+                          {workflow.updated_at !== workflow.created_at && (
+                            <span>Mis à jour {new Date(workflow.updated_at).toLocaleString('fr-FR')}</span>
                           )}
                         </div>
-                        {job.logs && (
-                          <div className="bg-gray-900 p-4 overflow-x-auto">
-                            <pre className="text-xs text-green-400 font-mono leading-relaxed whitespace-pre-wrap break-words">
-                              {job.logs}
-                            </pre>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {selectedRun && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gray-100 rounded-lg">
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <h2 className="text-lg font-semibold text-gray-900">Logs de Build</h2>
+                    </div>
+                    <button
+                      onClick={() => setSelectedRun(null)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {isLoadingLogs ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-center">
+                        <svg className="animate-spin h-8 w-8 text-blue-600 mx-auto mb-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <p className="text-sm text-gray-500">Chargement des logs...</p>
+                      </div>
+                    </div>
+                  ) : jobs.length === 0 ? (
+                    <div className="text-center py-12">
+                      <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p className="text-sm text-gray-500">Aucun log disponible</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {jobs.map((job) => (
+                        <div key={job.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="font-medium text-gray-900">{job.name}</span>
+                              {getStatusBadge(job.status, job.conclusion)}
+                            </div>
+                            {job.started_at && (
+                              <span className="text-xs text-gray-500">
+                                {new Date(job.started_at).toLocaleString('fr-FR')}
+                              </span>
+                            )}
+                          </div>
+                          {job.logs && (
+                            <div className="bg-gray-900 p-4 overflow-x-auto">
+                              <pre className="text-xs text-green-400 font-mono leading-relaxed whitespace-pre-wrap break-words">
+                                {job.logs}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-900">Gestion des Utilisateurs Béta</h2>
+              <button
+                onClick={loadUsers}
+                className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+            
+            {isLoadingUsers ? (
+              <div className="flex items-center justify-center py-12">
+                <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+            ) : users.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                Aucun utilisateur trouvé
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date d'inscription</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map((user) => (
+                      <tr key={user.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {user.email}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                          <div className="flex flex-col gap-1">
+                            {user.email_verified ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 w-fit">
+                                Email Vérifié
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 w-fit">
+                                Email Non Vérifié
+                              </span>
+                            )}
+                            {user.beta_access ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                                Béta Active
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 w-fit">
+                                En attente
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(user.created_at).toLocaleString('fr-FR')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => toggleBetaAccess(user.id, user.beta_access)}
+                            className={`px-4 py-2 rounded-lg transition-colors ${
+                              user.beta_access
+                                ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                                : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                            }`}
+                          >
+                            {user.beta_access ? 'Révoquer Accès' : 'Donner Accès'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

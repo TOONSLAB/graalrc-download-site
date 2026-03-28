@@ -18,10 +18,20 @@ export default function ChangelogPage() {
   useEffect(() => {
     async function fetchReleases() {
       try {
-        const response = await fetch('https://api.github.com/repos/TOONSLAB/graal-rc-releases/releases')
+        const response = await fetch('https://api.github.com/repos/TOONSLAB/rc/releases')
         if (!response.ok) throw new Error('Failed to fetch releases')
         const data = await response.json()
-        setReleases(data)
+        
+        // Filtrer les données sensibles potentielles
+        const cleanedData = data.map((release: Release) => ({
+          ...release,
+          body: release.body
+            .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+            .replace(/(ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{30,}/g, '[REDACTED_TOKEN]')
+            .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]')
+        }))
+        
+        setReleases(cleanedData)
       } catch (error) {
         console.error('Error fetching releases:', error)
       } finally {
@@ -87,15 +97,6 @@ export default function ChangelogPage() {
                     </p>
                   </div>
                   
-                  <a 
-                    href={release.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer" 
-                    className="btn-secondary px-4 py-2 text-sm flex items-center justify-center gap-2"
-                  >
-                    <span>Voir sur GitHub</span>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </a>
                 </div>
 
                 <div className="prose prose-invert max-w-none prose-graal">

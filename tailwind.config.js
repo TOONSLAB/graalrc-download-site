@@ -9,44 +9,34 @@ module.exports = {
     extend: {
       colors: {
         graal: {
-          dark: '#030712',     // Ultra dark blue/black
-          darker: '#111827',   // Dark gray for cards
-          primary: '#6366f1',  // Indigo 500
-          secondary: '#a855f7', // Purple 500
-          accent: '#ec4899',   // Pink 500
-          green: '#10b981',
-          red: '#ef4444',
-          blue: '#3b82f6',
+          dark: '#0f172a',     // Slate 900 - Background
+          darker: '#020617',   // Slate 950 - Cards/Nav
+          gold: '#fbbf24',     // Amber 400 - Primary
+          gold_dark: '#d97706', // Amber 600
+          blue: '#3b82f6',     // Blue 500 - Secondary
           text: {
-            main: '#f9fafb',    // Gray 50
-            muted: '#9ca3af',   // Gray 400
+            main: '#f1f5f9',    // Slate 100
+            muted: '#94a3b8',   // Slate 400
           }
         },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'], // Modern sans-serif everywhere
-        display: ['Outfit', 'sans-serif'], // For headings if needed
+        sans: ['Inter', 'sans-serif'], 
+        display: ['Outfit', 'sans-serif'],
       },
       backgroundImage: {
-        'graal-gradient': 'radial-gradient(circle at top center, #1e1b4b 0%, #0f172a 50%, #020617 100%)',
-        'primary-gradient': 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-        'card-gradient': 'linear-gradient(180deg, rgba(17, 24, 39, 0.8) 0%, rgba(17, 24, 39, 0.4) 100%)',
+        'graal-gradient': 'radial-gradient(circle at top center, #1e293b 0%, #0f172a 50%, #020617 100%)',
+        'gold-gradient': 'linear-gradient(135deg, #fbbf24 0%, #d97706 100%)',
+        'blue-gradient': 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+        'card-gradient': 'linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.4) 100%)',
+      },
+      borderColor: {
+        'graal-gold': '#fbbf24',
       },
       boxShadow: {
-        'graal': '0 0 20px rgba(99, 102, 241, 0.2)',
-        'graal-lg': '0 0 40px rgba(99, 102, 241, 0.3)',
-        'glow': '0 0 15px rgba(168, 85, 247, 0.5)',
+        'glow': '0 0 20px rgba(251, 191, 36, 0.3)',
+        'glow-lg': '0 0 40px rgba(251, 191, 36, 0.4)',
       },
-      animation: {
-        'fade-in-up': 'fadeInUp 0.5s ease-out',
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-      },
-      keyframes: {
-        fadeInUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        }
-      }
     },
   },
   plugins: [],
