@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'TOONSLAB'
-const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'rc'
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'graal-rc-releases'
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 // ---------- Types ----------
